@@ -5,10 +5,18 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBookRequest;
 use App\Http\Resources\BookResource;
 use App\Models\Book;
+use App\Services\BookService;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
+    protected BookService $bookService;
+
+    public function __construct(BookService $bookService)
+    {
+        $this->bookService = $bookService;
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -40,9 +48,8 @@ class BookController extends Controller
      */
     public function store(StoreBookRequest $request)
     {
-        // Creamos el libro con los datos validados
-        $book = Book::create($request->validated());
-        // Retornamos el libro creado en formato JSON y código 201
+        // Usamos el servicio para crear el libro
+        $book = $this->bookService->createBook($request->validated());
         return (new BookResource($book))
             ->response()
             ->setStatusCode(201);
@@ -91,9 +98,8 @@ class BookController extends Controller
      */
     public function update(UpdateBookRequest $request, Book $book)
     {
-        // Actualizamos el libro con los datos validados
-        $book->update($request->validated());
-        // Retornamos el libro actualizado en formato JSON y código 200
+        // Usamos el servicio para actualizar el libro
+        $book = $this->bookService->updateBook($book, $request->validated());
         return (new BookResource($book))
             ->response()
             ->setStatusCode(200);
@@ -115,9 +121,8 @@ class BookController extends Controller
      */
     public function destroy(Book $book)
     {
-        // Eliminamos el libro actual
-        $book->delete();
-        // Retornamos una respuesta vacía con código 204
+        // Usamos el servicio para eliminar el libro
+        $this->bookService->deleteBook($book);
         return response()->noContent();
     }
 }

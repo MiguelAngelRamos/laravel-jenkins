@@ -219,6 +219,37 @@ Esto recreará la base de datos con la columna correcta y poblará los datos de 
 #### Nota para estudiantes
 Siempre revisa que los nombres de los campos en migraciones, modelos, factories, seeders y requests sean **idénticos**. Laravel no corrige ni adapta los nombres automáticamente.
 
+## Tipos de pruebas en Laravel con PHPUnit
+
+Laravel utiliza PHPUnit para ejecutar pruebas automatizadas. Existen dos tipos principales de pruebas:
+
+### Pruebas Unitarias (Unit)
+- **Ubicación:** `tests/Unit/`
+- **Propósito:** Verifican el funcionamiento de pequeñas partes del código (funciones, métodos, clases) de forma aislada, sin depender de la base de datos ni de otros componentes del sistema.
+- **Ejemplo:** Probar que un método de la clase Book calcula correctamente el año de publicación, o que una función retorna el valor esperado.
+- **Ventaja:** Son rápidas y ayudan a detectar errores en la lógica interna del código.
+
+### Pruebas de Característica (Feature) = Pruebas de Integración
+- **Ubicación:** `tests/Feature/`
+- **Propósito:** Verifican el comportamiento de la aplicación completa, incluyendo la interacción entre varios componentes: base de datos, rutas, controladores, modelos y respuestas HTTP.
+- **Ejemplo:** Probar que el endpoint POST `/api/books` crea un libro correctamente y retorna el código 201, o que el endpoint GET `/api/books` retorna la lista de libros.
+- **Ventaja:** Simulan el uso real de la aplicación y ayudan a asegurar que los componentes funcionan juntos como se espera. Por eso, en Laravel, las pruebas Feature son consideradas pruebas de integración.
+
+### ¿Cómo ejecutar las pruebas?
+Puedes ejecutar todas las pruebas con:
+```bash
+php artisan test
+```
+O directamente con PHPUnit:
+```bash
+vendor/bin/phpunit
+```
+
+### Recomendación para estudiantes
+- Escribe pruebas unitarias para la lógica interna y funciones pequeñas.
+- Escribe pruebas de característica para verificar el funcionamiento de la API y los endpoints.
+- Las pruebas ayudan a detectar errores antes de desplegar y facilitan el mantenimiento del código.
+
 ---
 
 Si tienes dudas, revisa los comentarios en el código fuente para entender cada parte del flujo y la lógica de la API.
