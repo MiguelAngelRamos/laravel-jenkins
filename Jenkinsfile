@@ -8,8 +8,12 @@ pipeline {
   }
 
   environment {
-    APP_PORT = '8000'
-    BASE_URL = "http://localhost:${APP_PORT}/api"
+    APP_PORT   = '8000'
+    DOCKER_NET = 'laravel_ci'
+    SERVICE    = 'laravel-api'
+    CI_IMAGE   = 'laravel-ci:latest'
+    // OJO: desde el contenedor de newman apuntamos por nombre de servicio del contenedor
+    BASE_URL   = "http://laravel-api:${APP_PORT}/api"
   }
 
   stages {
@@ -21,19 +25,31 @@ pipeline {
       }
     }
 
-    stage('Instalar & Preparar Laravel') {
+    stage('Build CI image & network') {
       steps {
         unstash 'src'
         sh '''
           set -e
+          docker network create ${DOCKER_NET} || true
+          docker build -t ${CI_IMAGE} -f Dockerfile.ci .
+        '''
+      }
+    }
 
-          echo "[CI] Preparando .env.ci"
-          if [ -f .env ]; then
-            cp .env .env.ci
-          elif [ -f .env.example ]; then
-            cp .env.example .env.ci
-          else
-            cat > .env.ci <<'EOF'
+    stage('Prep Laravel (dentro del contenedor)') {
+      steps {
+        sh '''
+          set -e
+          docker run --rm -v "$PWD":/app -w /app ${CI_IMAGE} bash -lc '
+            set -e
+
+            # .env.ci robusto
+            if [ -f .env ]; then
+              cp .env .env.ci
+            elif [ -f .env.example ]; then
+              cp .env.example .env.ci
+            else
+              cat > .env.ci <<EOF
 APP_ENV=ci
 APP_KEY=
 APP_DEBUG=false
@@ -43,75 +59,54 @@ CACHE_DRIVER=file
 QUEUE_CONNECTION=sync
 SESSION_DRIVER=file
 EOF
-          fi
+            fi
 
-          DBFILE="${PWD}/database/database.sqlite"
-          mkdir -p database
-          touch "$DBFILE"
+            DBFILE=/app/database/database.sqlite
+            mkdir -p /app/database
+            touch "$DBFILE"
 
-          if grep -q '^DB_CONNECTION=' .env.ci; then
-            sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env.ci
-          else
-            echo "DB_CONNECTION=sqlite" >> .env.ci
-          fi
+            if grep -q "^DB_CONNECTION=" .env.ci; then sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env.ci; else echo "DB_CONNECTION=sqlite" >> .env.ci; fi
+            if grep -q "^DB_DATABASE=" .env.ci; then sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DBFILE|" .env.ci; else echo "DB_DATABASE=$DBFILE" >> .env.ci; fi
+            if ! grep -q "^DB_FOREIGN_KEYS=" .env.ci; then echo "DB_FOREIGN_KEYS=true" >> .env.ci; fi
 
-          if grep -q '^DB_DATABASE=' .env.ci; then
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DBFILE}|" .env.ci
-          else
-            echo "DB_DATABASE=${DBFILE}" >> .env.ci
-          fi
+            cp .env.ci .env
 
-          if ! grep -q '^DB_FOREIGN_KEYS=' .env.ci; then
-            echo "DB_FOREIGN_KEYS=true" >> .env.ci
-          fi
+            composer install --no-interaction --prefer-dist --no-progress
+            php artisan key:generate
+            php artisan config:cache
+            php artisan route:cache || true
+            php artisan migrate --force
+            php artisan db:seed --force
 
-          cp .env.ci .env
-
-          echo "[CI] PHP/Composer"
-          php -v
-          composer -V
-          composer install --no-interaction --prefer-dist --no-progress
-
-          php artisan key:generate
-          php artisan config:cache
-          php artisan route:cache || true   # tolera closures
-
-          echo "[CI] Migraciones/Seed"
-          php artisan migrate --force
-          php artisan db:seed --force
-
-          chmod -R 0777 storage bootstrap/cache || true
-
-          echo "[CI] Verificando SQLite habilitado en PHP:"
-          php -m | grep -i sqlite || echo "ADVERTENCIA: Extensión sqlite no listada; si falla, instala php-sqlite3 en el agente."
+            chmod -R 0777 storage bootstrap/cache || true
+          '
         '''
       }
     }
 
-    stage('Levantar API') {
+    stage('Levantar API (contenedor)') {
       steps {
         sh '''
           set -e
+          # Detén previo si existe
+          docker rm -f ${SERVICE} || true
 
-          if [ -f storage/ci-php.pid ]; then
-            kill -9 $(cat storage/ci-php.pid) || true
-            rm -f storage/ci-php.pid
-          fi
+          # Arranca servidor Laravel dentro del contenedor
+          docker run -d --rm --name ${SERVICE} \
+            --network ${DOCKER_NET} \
+            -v "$PWD":/app -w /app \
+            -p ${APP_PORT}:8000 \
+            ${CI_IMAGE} bash -lc "php artisan serve --host=0.0.0.0 --port=8000"
 
-          nohup php artisan serve --host=0.0.0.0 --port=${APP_PORT} > storage/logs/ci-server.log 2>&1 &
-          echo $! > storage/ci-php.pid
-
-          echo "[CI] Esperando ${BASE_URL}/ping ..."
+          echo "[CI] Esperando a ${SERVICE}:8000/api/ping ..."
           for i in $(seq 1 40); do
-            if curl -fsS "${BASE_URL}/ping" > /dev/null; then
-              echo "API arriba en ${BASE_URL}"
-              exit 0
-            fi
+            docker run --rm --network ${DOCKER_NET} curlimages/curl:8.8.0 \
+              -fsS http://${SERVICE}:8000/api/ping && exit 0 || true
             sleep 1
           done
 
-          echo "La API no respondió a ${BASE_URL}/ping a tiempo. Últimas líneas del log:"
-          tail -n 100 storage/logs/ci-server.log || true
+          echo "La API no respondió a tiempo. Logs del contenedor:"
+          docker logs ${SERVICE} || true
           exit 1
         '''
       }
@@ -126,15 +121,13 @@ EOF
       }
     }
 
-    stage('Postman (Newman en Docker)') {
+    stage('Postman (Newman en contenedor)') {
       steps {
         sh '''
           set -e
           rm -rf newman && mkdir -p newman
 
-          # Requiere que el usuario jenkins esté en el grupo docker:
-          #   sudo usermod -aG docker jenkins && sudo systemctl restart docker jenkins
-          docker run --rm --network host \
+          docker run --rm --network ${DOCKER_NET} \
             -v "$PWD/tests/postman":/etc/newman \
             -v "$PWD/newman":/etc/newman/newman \
             postman/newman:alpine sh -lc "
@@ -154,13 +147,10 @@ EOF
   post {
     always {
       sh '''
-        if [ -f storage/ci-php.pid ]; then
-          kill -9 $(cat storage/ci-php.pid) || true
-          rm -f storage/ci-php.pid
-        fi
+        docker rm -f ${SERVICE} || true
       '''
-      junit 'newman/results.xml'
-      archiveArtifacts artifacts: 'newman/**, storage/logs/ci-server.log', fingerprint: false
+      junit testResults: 'newman/results.xml', allowEmptyResults: true
+      archiveArtifacts artifacts: 'newman/**', fingerprint: false
     }
   }
 }

@@ -1,0 +1,14 @@
+# Dockerfile.ci
+FROM php:8.3-cli
+
+# Dependencias del sistema y extensiones PHP necesarias
+RUN apt-get update && apt-get install -y git unzip libzip-dev libsqlite3-dev \
+    && docker-php-ext-install pdo_sqlite \
+    && docker-php-ext-configure zip \
+    && docker-php-ext-install zip \
+    && docker-php-ext-install mbstring
+
+# Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
