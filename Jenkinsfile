@@ -159,13 +159,20 @@ EOF
     }
   }
 
-  post {
-    always {
-      sh '''
-        docker rm -f ${SERVICE} || true
-      '''
-      junit testResults: 'newman/results.xml', allowEmptyResults: true
-      archiveArtifacts artifacts: 'newman/**', fingerprint: false
-    }
+post {
+  always {
+    sh '''
+      docker rm -f ${SERVICE} || true
+    '''
+    junit testResults: 'newman/results.xml', allowEmptyResults: true
+    archiveArtifacts artifacts: 'newman/**', fingerprint: false
+    publishHTML(target: [
+      reportName: 'Newman HTML Report',
+      reportDir: 'newman',
+      reportFiles: 'report.html',
+      alwaysLinkToLastBuild: true,
+      keepAll: true
+    ])
   }
+}
 }
