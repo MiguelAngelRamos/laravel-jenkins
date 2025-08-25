@@ -16,11 +16,9 @@ class EloquentBookRepository implements BookRepository
         // 1. Se actualiza la base de datos
         $book->update($data);
 
-        // 2. Se refresca el objeto $book desde la base de datos
-        $book->refresh();
-
-        // 3. Se devuelve el objeto ya con los datos nuevos ("Richard")
-        return $book;
+        // 2. ¡SOLUCIÓN! Se obtiene una instancia completamente nueva y fresca del modelo desde la BBDD.
+        //    fresh() es más robusto que refresh() en algunos casos límite.
+        return $book->fresh();
     }
 
     public function delete(Book $book): void
