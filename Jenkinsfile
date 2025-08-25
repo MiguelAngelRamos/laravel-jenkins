@@ -84,7 +84,7 @@ EOF
 
               php artisan key:generate
 
-              # Limpia todas las cachés para asegurar un estado limpio
+              # Limpia todas las cachés de Laravel para asegurar un estado limpio
               php artisan optimize:clear
 
               php artisan config:cache
@@ -106,13 +106,13 @@ EOF
 
           UID_GID="$(id -u):$(id -g)"
 
-          # Arranca servidor Laravel dentro del contenedor con el mismo uid/gid del agente
+          # Arranca servidor Laravel deshabilitando OPcache (-d opcache.enable=0) para asegurar que se lee el código fuente fresco
           docker run -d --rm --name ${SERVICE} \
             --user "$UID_GID" \
             --network ${DOCKER_NET} \
             -v "$PWD":/app -w /app \
             -p ${APP_PORT}:8000 \
-            ${CI_IMAGE} bash -lc "php artisan serve --host=0.0.0.0 --port=8000"
+            ${CI_IMAGE} bash -lc "php -d opcache.enable=0 artisan serve --host=0.0.0.0 --port=8000"
 
           echo "[CI] Esperando a ${SERVICE}:8000/api/ping ..."
           for i in $(seq 1 40); do
