@@ -12,7 +12,7 @@ pipeline {
     DOCKER_NET = 'laravel_ci'
     SERVICE    = 'laravel-api'
     CI_IMAGE   = 'laravel-ci:latest'
-    // OJO: desde el contenedor de newman apuntamos por nombre de servicio del contenedor
+    // Desde el contenedor de newman apuntamos por nombre de servicio del contenedor
     BASE_URL   = "http://laravel-api:${APP_PORT}/api"
   }
 
@@ -20,14 +20,14 @@ pipeline {
 
     stage('Checkout') {
       steps {
+        // Workspace limpio para no arrastrar archivos root de corridas previas
+        deleteDir()
         checkout scm
-        stash name: 'src', includes: '**/*', excludes: '.git/**'
       }
     }
 
     stage('Build CI image & network') {
       steps {
-        unstash 'src'
         sh '''
           set -e
           docker network create ${DOCKER_NET} || true
@@ -40,16 +40,24 @@ pipeline {
       steps {
         sh '''
           set -e
-          docker run --rm -v "$PWD":/app -w /app ${CI_IMAGE} bash -lc '
-            set -e
 
-            # .env.ci robusto
-            if [ -f .env ]; then
-              cp .env .env.ci
-            elif [ -f .env.example ]; then
-              cp .env.example .env.ci
-            else
-              cat > .env.ci <<EOF
+          UID_GID="$(id -u):$(id -g)"
+
+          docker run --rm \
+            --user "$UID_GID" \
+            -e COMPOSER_HOME=/tmp/composer-home \
+            -e COMPOSER_CACHE_DIR=/tmp/composer-home/cache \
+            -e XDG_CACHE_HOME=/tmp/.cache \
+            -v "$PWD":/app -w /app ${CI_IMAGE} bash -lc '
+              set -e
+
+              # .env.ci robusto
+              if [ -f .env ]; then
+                cp .env .env.ci
+              elif [ -f .env.example ]; then
+                cp .env.example .env.ci
+              else
+                cat > .env.ci <<EOF
 APP_ENV=ci
 APP_KEY=
 APP_DEBUG=false
@@ -59,27 +67,29 @@ CACHE_DRIVER=file
 QUEUE_CONNECTION=sync
 SESSION_DRIVER=file
 EOF
-            fi
+              fi
 
-            DBFILE=/app/database/database.sqlite
-            mkdir -p /app/database
-            touch "$DBFILE"
+              DBFILE=/app/database/database.sqlite
+              mkdir -p /app/database
+              : > "$DBFILE"
 
-            if grep -q "^DB_CONNECTION=" .env.ci; then sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env.ci; else echo "DB_CONNECTION=sqlite" >> .env.ci; fi
-            if grep -q "^DB_DATABASE=" .env.ci; then sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DBFILE|" .env.ci; else echo "DB_DATABASE=$DBFILE" >> .env.ci; fi
-            if ! grep -q "^DB_FOREIGN_KEYS=" .env.ci; then echo "DB_FOREIGN_KEYS=true" >> .env.ci; fi
+              grep -q "^DB_CONNECTION=" .env.ci && sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env.ci || echo "DB_CONNECTION=sqlite" >> .env.ci
+              grep -q "^DB_DATABASE=" .env.ci   && sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DBFILE|" .env.ci || echo "DB_DATABASE=$DBFILE" >> .env.ci
+              grep -q "^DB_FOREIGN_KEYS=" .env.ci || echo "DB_FOREIGN_KEYS=true" >> .env.ci
 
-            cp .env.ci .env
+              cp .env.ci .env
 
-            composer install --no-interaction --prefer-dist --no-progress
-            php artisan key:generate
-            php artisan config:cache
-            php artisan route:cache || true
-            php artisan migrate --force
-            php artisan db:seed --force
+              # Dependencias PHP y caches de framework
+              composer install --no-interaction --prefer-dist --no-progress
 
-            chmod -R 0777 storage bootstrap/cache || true
-          '
+              php artisan key:generate
+              php artisan config:cache
+              php artisan route:clear
+              php artisan route:cache || true
+
+              php artisan migrate --force
+              php artisan db:seed --force
+            '
         '''
       }
     }
@@ -91,8 +101,11 @@ EOF
           # Detén previo si existe
           docker rm -f ${SERVICE} || true
 
-          # Arranca servidor Laravel dentro del contenedor
+          UID_GID="$(id -u):$(id -g)"
+
+          # Arranca servidor Laravel dentro del contenedor con el mismo uid/gid del agente
           docker run -d --rm --name ${SERVICE} \
+            --user "$UID_GID" \
             --network ${DOCKER_NET} \
             -v "$PWD":/app -w /app \
             -p ${APP_PORT}:8000 \

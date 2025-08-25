@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BookController;
+use App\Http\Controllers\HealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -36,8 +37,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::apiResource('books', BookController::class);
 
 // Ruta de salud para probar rápido
-Route::get('ping', fn () => ['pong' => now()->toISOString()]);
+//Route::get('ping', fn () => ['pong' => now()->toISOString()]);
 
+Route::get('ping', [HealthController::class, 'ping']);
 /*
 |-------------------------------------------------------------
 | ¿Qué es Illuminate\Http\Request?
