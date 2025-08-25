@@ -142,13 +142,20 @@ stage('Postman (Newman en contenedor)') {
 
       UID_GID="$(id -u):$(id -g)"
 
+      # Prefijo npm escribible por el usuario no-root dentro del contenedor
+      NPM_PREFIX=/tmp/npm
+
       docker run --rm --network ${DOCKER_NET} \
         --entrypoint sh \
         --user "$UID_GID" \
+        -e NPM_CONFIG_PREFIX="${NPM_PREFIX}" \
+        -e NODE_PATH="${NPM_PREFIX}/lib/node_modules" \
+        -e PATH="${NPM_PREFIX}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         -v "$PWD/tests/postman":/etc/newman \
         -v "$PWD/newman":/etc/newman/newman \
         postman/newman:alpine -lc "
-          npm i -g newman-reporter-htmlextra >/dev/null 2>&1 || true &&
+          set -e
+          npm i -g newman-reporter-htmlextra >/dev/null 2>&1
           newman run /etc/newman/APIREST-BIBLIOTECA.postman_collection.json \
             --env-var base_url=${BASE_URL} \
             --reporters cli,junit,htmlextra \
@@ -159,6 +166,7 @@ stage('Postman (Newman en contenedor)') {
     '''
   }
 }
+
 
   }
 
