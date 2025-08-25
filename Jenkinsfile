@@ -83,8 +83,11 @@ EOF
               composer install --no-interaction --prefer-dist --no-progress
 
               php artisan key:generate
+
+              # Limpia todas las cachés para asegurar un estado limpio
+              php artisan optimize:clear
+
               php artisan config:cache
-              php artisan route:clear
               php artisan route:cache || true
 
               php artisan migrate --force
@@ -134,29 +137,25 @@ EOF
       }
     }
 
-stage('Postman (Newman en contenedor)') {
-  steps {
-    sh '''
-      set -e
-      rm -rf newman && mkdir -p newman
+    stage('Postman (Newman en contenedor)') {
+      steps {
+        sh '''
+          set -e
+          rm -rf newman && mkdir -p newman
 
-      # Imagen que incluye htmlextra preinstalado
-      docker run --rm --network ${DOCKER_NET} \
-        -v "$PWD/tests/postman":/etc/newman \
-        -v "$PWD/newman":/etc/newman/newman \
-        dannydainton/htmlextra run /etc/newman/APIREST-BIBLIOTECA.postman_collection.json \
-          --env-var base_url=${BASE_URL} \
-          --reporters cli,junit,htmlextra \
-          --reporter-junit-export /etc/newman/newman/results.xml \
-          --reporter-htmlextra-export /etc/newman/newman/report.html \
-          --timeout-request 10000 --delay-request 50
-    '''
-  }
-}
-
-
-
-
+          # Imagen que incluye htmlextra preinstalado
+          docker run --rm --network ${DOCKER_NET} \
+            -v "$PWD/tests/postman":/etc/newman \
+            -v "$PWD/newman":/etc/newman/newman \
+            dannydainton/htmlextra run /etc/newman/APIREST-BIBLIOTECA.postman_collection.json \
+              --env-var base_url=${BASE_URL} \
+              --reporters cli,junit,htmlextra \
+              --reporter-junit-export /etc/newman/newman/results.xml \
+              --reporter-htmlextra-export /etc/newman/newman/report.html \
+              --timeout-request 10000 --delay-request 50
+        '''
+      }
+    }
   }
 
   post {
