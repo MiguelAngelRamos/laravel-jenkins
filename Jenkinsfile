@@ -134,27 +134,32 @@ EOF
       }
     }
 
-    stage('Postman (Newman en contenedor)') {
-      steps {
-        sh '''
-          set -e
-          rm -rf newman && mkdir -p newman
+stage('Postman (Newman en contenedor)') {
+  steps {
+    sh '''
+      set -e
+      rm -rf newman && mkdir -p newman
 
-          docker run --rm --network ${DOCKER_NET} \
-            -v "$PWD/tests/postman":/etc/newman \
-            -v "$PWD/newman":/etc/newman/newman \
-            postman/newman:alpine sh -lc "
-              npm i -g newman-reporter-htmlextra >/dev/null 2>&1 || true &&
-              newman run /etc/newman/APIREST-BIBLIOTECA.postman_collection.json \
-                --env-var base_url=${BASE_URL} \
-                --reporters cli,junit,htmlextra \
-                --reporter-junit-export /etc/newman/newman/results.xml \
-                --reporter-htmlextra-export /etc/newman/newman/report.html \
-                --timeout-request 10000 --delay-request 50
-            "
-        '''
-      }
-    }
+      UID_GID="$(id -u):$(id -g)"
+
+      docker run --rm --network ${DOCKER_NET} \
+        --entrypoint sh \
+        --user "$UID_GID" \
+        -v "$PWD/tests/postman":/etc/newman \
+        -v "$PWD/newman":/etc/newman/newman \
+        postman/newman:alpine -lc "
+          npm i -g newman-reporter-htmlextra >/dev/null 2>&1 || true &&
+          newman run /etc/newman/APIREST-BIBLIOTECA.postman_collection.json \
+            --env-var base_url=${BASE_URL} \
+            --reporters cli,junit,htmlextra \
+            --reporter-junit-export /etc/newman/newman/results.xml \
+            --reporter-htmlextra-export /etc/newman/newman/report.html \
+            --timeout-request 10000 --delay-request 50
+        "
+    '''
+  }
+}
+
   }
 
   post {
