@@ -27,28 +27,63 @@ pipeline {
         sh '''
           set -e
 
-          # .env de CI (SQLite relativo para Linux)
-          cp .env .env.ci || true
-          sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=sqlite|g" .env.ci
-          sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${PWD}/database/database.sqlite|g" .env.ci
-          cp .env.ci .env
-          mkdir -p database
-          touch database/database.sqlite
+          echo "[CI] Preparando .env.ci"
+          if [ -f .env ]; then
+            cp .env .env.ci
+          elif [ -f .env.example ]; then
+            cp .env.example .env.ci
+          else
+            cat > .env.ci <<'EOF'
+APP_ENV=ci
+APP_KEY=
+APP_DEBUG=false
+APP_URL=http://localhost
+DB_CONNECTION=sqlite
+CACHE_DRIVER=file
+QUEUE_CONNECTION=sync
+SESSION_DRIVER=file
+EOF
+          fi
 
-          # Composer + cacheo básico
+          DBFILE="${PWD}/database/database.sqlite"
+          mkdir -p database
+          touch "$DBFILE"
+
+          if grep -q '^DB_CONNECTION=' .env.ci; then
+            sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env.ci
+          else
+            echo "DB_CONNECTION=sqlite" >> .env.ci
+          fi
+
+          if grep -q '^DB_DATABASE=' .env.ci; then
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DBFILE}|" .env.ci
+          else
+            echo "DB_DATABASE=${DBFILE}" >> .env.ci
+          fi
+
+          if ! grep -q '^DB_FOREIGN_KEYS=' .env.ci; then
+            echo "DB_FOREIGN_KEYS=true" >> .env.ci
+          fi
+
+          cp .env.ci .env
+
+          echo "[CI] PHP/Composer"
           php -v
           composer -V
           composer install --no-interaction --prefer-dist --no-progress
 
           php artisan key:generate
           php artisan config:cache
-          php artisan route:cache || true
+          php artisan route:cache || true   # tolera closures
 
+          echo "[CI] Migraciones/Seed"
           php artisan migrate --force
           php artisan db:seed --force
 
-          # Permisos mínimos (por si acaso)
           chmod -R 0777 storage bootstrap/cache || true
+
+          echo "[CI] Verificando SQLite habilitado en PHP:"
+          php -m | grep -i sqlite || echo "ADVERTENCIA: Extensión sqlite no listada; si falla, instala php-sqlite3 en el agente."
         '''
       }
     }
@@ -58,7 +93,6 @@ pipeline {
         sh '''
           set -e
 
-          # Si quedó un server previo, lo bajamos
           if [ -f storage/ci-php.pid ]; then
             kill -9 $(cat storage/ci-php.pid) || true
             rm -f storage/ci-php.pid
@@ -67,7 +101,7 @@ pipeline {
           nohup php artisan serve --host=0.0.0.0 --port=${APP_PORT} > storage/logs/ci-server.log 2>&1 &
           echo $! > storage/ci-php.pid
 
-          # Espera activa a /api/ping
+          echo "[CI] Esperando ${BASE_URL}/ping ..."
           for i in $(seq 1 40); do
             if curl -fsS "${BASE_URL}/ping" > /dev/null; then
               echo "API arriba en ${BASE_URL}"
@@ -76,7 +110,8 @@ pipeline {
             sleep 1
           done
 
-          echo "La API no respondió a ${BASE_URL}/ping a tiempo"
+          echo "La API no respondió a ${BASE_URL}/ping a tiempo. Últimas líneas del log:"
+          tail -n 100 storage/logs/ci-server.log || true
           exit 1
         '''
       }
@@ -86,7 +121,6 @@ pipeline {
       when { expression { return fileExists('tests/postman/APIREST-BIBLIOTECA.postman_collection.json') } }
       steps {
         sh '''
-          # Corrige el typo conocido: pm.reponse.json() -> pm.response.json()
           sed -i 's/pm\\.reponse\\.json()/pm.response.json()/g' tests/postman/APIREST-BIBLIOTECA.postman_collection.json || true
         '''
       }
@@ -98,8 +132,7 @@ pipeline {
           set -e
           rm -rf newman && mkdir -p newman
 
-          # Ejecuta Newman en contenedor con red del host (Linux)
-          # Nota: requiere que el usuario jenkins pertenezca al grupo docker
+          # Requiere que el usuario jenkins esté en el grupo docker:
           #   sudo usermod -aG docker jenkins && sudo systemctl restart docker jenkins
           docker run --rm --network host \
             -v "$PWD/tests/postman":/etc/newman \
@@ -120,15 +153,12 @@ pipeline {
 
   post {
     always {
-      // Bajamos el server embebido si quedó vivo
       sh '''
         if [ -f storage/ci-php.pid ]; then
           kill -9 $(cat storage/ci-php.pid) || true
           rm -f storage/ci-php.pid
         fi
       '''
-
-      // Publica resultados y artefactos
       junit 'newman/results.xml'
       archiveArtifacts artifacts: 'newman/**, storage/logs/ci-server.log', fingerprint: false
     }
