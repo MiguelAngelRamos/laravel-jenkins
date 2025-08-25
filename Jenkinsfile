@@ -31,7 +31,8 @@ pipeline {
         sh '''
           set -e
           docker network create ${DOCKER_NET} || true
-          docker build -t ${CI_IMAGE} -f Dockerfile.ci .
+          # Se añade --no-cache para forzar la reconstrucción completa de la imagen
+          docker build --no-cache -t ${CI_IMAGE} -f Dockerfile.ci .
         '''
       }
     }
