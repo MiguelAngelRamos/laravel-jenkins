@@ -160,7 +160,7 @@
 						"exec": [
 							"pm.test('status 200', () => pm.expect(pm.response.code).to.eql(200));\r",
 							"pm.test('autor actualizado', () => {\r",
-							"    const json = pm.reponse.json();\r",
+							"    const json = pm.response.json();\r",
 							"    pm.expect(json.data.author).to.eql('Richard');\r",
 							"})"
 						],
