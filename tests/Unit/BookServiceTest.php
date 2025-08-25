@@ -70,37 +70,70 @@ class BookServiceTest extends TestCase
     /** @test */
     public function it_updates_a_book_via_repository()
     {
-        // Arrange
+        /**
+         * Arrange
+         * - Creamos un modelo Book en memoria (no persistido) que actuará como entidad a actualizar.
+         */
         $book = new Book([
-            'title' => 'Old',
-            'author' => 'Author',
-            'published_year' => 2000,
-            'isbn' => '1234567890123',
+            'title' => 'Old',          // estado inicial del título
+            'author' => 'Author',      // autor inicial
+            'published_year' => 2000,  // año inicial
+            'isbn' => '1234567890123', // isbn inicial
         ]);
 
+        /**
+         * "Payload" (datos de entrada):
+         * - Es el conjunto de campos y valores que el servicio enviará al repositorio para ejecutar la operación.
+         * - Debe contener SOLO lo que queremos cambiar, manteniendo el contrato claro y explícito.
+         * - Aquí representa la actualización parcial: título y año publicados.
+         */
         $payload = [
-            'title' => 'New',
-            'published_year' => 2020,
+            'title' => 'New',          // nuevo título que deseamos guardar
+            'published_year' => 2020,  // nuevo año
         ];
 
-        // Simulamos el Book actualizado que el repositorio devolvería
+        /**
+         * Simulación del resultado que devolvería el repositorio tras aplicar la actualización.
+         * - Tomamos el array actual del $book y le "mezclamos" el $payload para reflejar el cambio.
+         * - No se toca la BD: es puramente en memoria.
+         */
         $updated = new Book(array_merge($book->toArray(), $payload));
 
-        // Mock del repositorio con expectativa sobre update:
-        // - identicalTo: misma instancia de $book
-        // - equalTo: contenido del payload
-        $repo = $this->createMock(BookRepository::class);
-        $repo->expects($this->once())
-            ->method('update')
-            ->with($this->identicalTo($book), $this->equalTo($payload))
-            ->willReturn($updated);
+        /*
+         Mock del repositorio (explicación simple con ejemplo):
+         Caso de uso: queremos ACTUALIZAR un libro para que su título sea 'New' y su año 2020.
+         ¿Qué esperamos que haga el servicio?
+         - Que llame UNA sola vez al repositorio ->update(...).
+         - Que le pase EXACTAMENTE el mismo objeto $book (no una copia),
+           porque es ese libro el que queremos modificar.
+         - Que le pase los datos del cambio tal cual los armamos en $payload
+           (mismo contenido: título 'New' y published_year 2020).
+         ¿Qué devolvemos en la simulación?
+         - Fingimos que el repositorio devuelve $updated, es decir, el libro ya con esos cambios aplicados.
+        */
+        $repo = $this->createMock(BookRepository::class); // creamos el "doble" (simulación) del repositorio
+        $repo->expects($this->once())                     // debe llamarse exactamente 1 vez; si 0 o >1, falla el test
+            ->method('update')                            // el método del repositorio que esperamos que se invoque
+            ->with(
+                $this->identicalTo($book),                // MISMA instancia $book (identidad), no otra distinta
+                $this->equalTo($payload)                  // Mismo contenido que $payload (por valor)
+            )
+            ->willReturn($updated);                       // el mock responde con el libro ya actualizado ($updated)
 
-        $service = new BookService($repo); // DI del mock
+        // Inyectamos el mock en el servicio (DI) para aislar la unidad bajo prueba del acceso a datos real
+        $service = new BookService($repo);
 
-        // Act
+        /**
+         * Act
+         * - Ejecutamos la operación a probar. Esta llamada DISPARA la simulación del mock:
+         *   el servicio delega en $repo->update($book, $payload) y el mock aplica las expectativas.
+         */
         $result = $service->updateBook($book, $payload);
 
-        // Assert
+        /**
+         * Assert
+         * - Verificamos tipo y que los campos modificados tengan los valores esperados.
+         */
         $this->assertInstanceOf(Book::class, $result);
         $this->assertSame('New', $result->title);
         $this->assertSame(2020, $result->published_year);
@@ -109,27 +142,34 @@ class BookServiceTest extends TestCase
     /** @test */
     public function it_deletes_a_book_via_repository()
     {
-        // Arrange
+        // Arrange: preparamos el escenario de prueba
+        // Creamos un Book en memoria (NO se persiste en BD); será el que "eliminaremos".
         $book = new Book([
-            'title' => 'Any',
-            'author' => 'Any',
-            'published_year' => 1999,
-            'isbn' => '9999999999999',
+            'title' => 'Any',            // título de ejemplo (no afecta la lógica del borrado)
+            'author' => 'Any',           // autor de ejemplo
+            'published_year' => 1999,    // año de ejemplo
+            'isbn' => '9999999999999',   // isbn de ejemplo; nos sirve para identificar el objeto
         ]);
 
-        // Para métodos void no configuramos willReturn.
-        // Solo validamos que se haya invocado con la instancia correcta.
-        $repo = $this->createMock(BookRepository::class);
-        $repo->expects($this->once())
-            ->method('delete')
-            ->with($this->identicalTo($book));
+        // Creamos un mock del repositorio (doble de prueba): no toca la base de datos real
+        $repo = $this->createMock(BookRepository::class); // simulación del contrato BookRepository
+        // Definimos EXPECTATIVAS sobre el mock:
+        // - Debe llamarse exactamente UNA VEZ al método delete
+        // - Debe recibir la MISMA instancia de $book (identidad, no copia)
+        $repo->expects($this->once())                 // esperamos 1 sola invocación; si 0 o >1, la prueba falla
+            ->method('delete')                        // el método concreto que debe invocarse en el repositorio
+            ->with($this->identicalTo($book));        // el argumento debe ser el mismo objeto $book (identicalTo)
 
-        $service = new BookService($repo); // DI del mock
+        // Inyectamos el mock en el servicio (Dependency Injection)
+        // De esta forma, el servicio delega en el mock y NO en Eloquent/BD real.
+        $service = new BookService($repo);
 
-        // Act
+        // Act: ejecutamos la unidad bajo prueba
+        // Esta llamada dispara la invocación al mock: $repo->delete($book)
         $service->deleteBook($book);
 
-        // Assert: si llegamos aquí, la expectativa del mock se cumplió
+        // Assert: si las expectativas del mock no se cumplieran, PHPUnit marcaría fallo
+        // Añadimos una aserción explícita para dejar constancia en el conteo
         $this->addToAssertionCount(1);
     }
 }

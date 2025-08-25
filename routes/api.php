@@ -37,3 +37,17 @@ Route::apiResource('books', BookController::class);
 
 // Ruta de salud para probar rápido
 Route::get('ping', fn () => ['pong' => now()->toISOString()]);
+
+/*
+|-------------------------------------------------------------
+| ¿Qué es Illuminate\Http\Request?
+|-------------------------------------------------------------
+| Esta clase representa una petición HTTP en Laravel.
+| - En producción, Laravel la instancia automáticamente cuando recibe una petición real.
+| - En las rutas (como el closure de /user), Laravel inyecta el objeto Request con los datos reales.
+| - En los tests unitarios, puedes crear manualmente una instancia de Request para simular una petición,
+|   pero NO se envía nada por la red ni se ejecuta el ciclo HTTP completo.
+| - Así, puedes probar la lógica de los controladores de forma aislada, sin dependencias externas.
+| - Es útil para comprender la diferencia entre una petición real y una simulada en pruebas.
+|-------------------------------------------------------------
+*/

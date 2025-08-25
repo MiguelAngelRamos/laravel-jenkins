@@ -1,0 +1,297 @@
+{
+	"info": {
+		"_postman_id": "51e8a53a-c61e-49ec-adf5-3fc4de84ce60",
+		"name": "APIREST-BIBLIOTECA",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "6100311"
+	},
+	"item": [
+		{
+			"name": "Listar libros(index)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('status 200', () => pm.expect(pm.response.code).to.eql(200));\r",
+							"pm.test('estructura', () => {\r",
+							"    const json = pm.response.json();\r",
+							"    pm.expect(json).to.have.property('data').that.is.an('array');\r",
+							"    pm.expect(json).to.have.property('links');\r",
+							"    pm.expect(json).to.have.property('meta');\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/books",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"books"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Crear Libro (store)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Esquema esperado para BookResource\r",
+							"const bookSchema = {\r",
+							"  type: 'object',\r",
+							"  required: ['data'],\r",
+							"  properties: {\r",
+							"    data: {\r",
+							"      type: 'object',\r",
+							"      required: ['id','title','author','published_year','isbn'],\r",
+							"      properties: {\r",
+							"        id: { type: ['integer','number'] },\r",
+							"        title: { type: 'string' },\r",
+							"        author: { type: 'string' },\r",
+							"        published_year: { type: ['integer','number'] },\r",
+							"        isbn: { type: 'string' },\r",
+							"        description: { type: ['string','null'] },\r",
+							"        created_at: { type: ['string','null'] },\r",
+							"        updated_at: { type: ['string','null'] }\r",
+							"      }\r",
+							"    }\r",
+							"  }\r",
+							"};\r",
+							"\r",
+							"pm.test('status 201', () => pm.expect(pm.response.code).to.eql(201));\r",
+							"pm.test('Cumple con el esquema BookResource', ()=> pm.response.to.have.jsonSchema(bookSchema));\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"pm.collectionVariables.set('book_id', json.data.id);\r",
+							"pm.collectionVariables.set('isbn_last', json.data.isbn);\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"title\": \"El misterio del bosque (by {{sofia_name}})\",\r\n    \"author\": \"Sofia\",\r\n    \"published_year\": {{year_now}},\r\n    \"isbn\": \"{{isbn_dynamic}}\",\r\n    \"description\": \"Creado por {{sofia_email}}\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/books",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"books"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Mostrar Libro",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('status 200', () => pm.expect(pm.response.code).to.eql(200));\r",
+							"\r",
+							"pm.test('tiene el id solicitado', () => {\r",
+							"    const json = pm.response.json();\r",
+							"    pm.expect(json).to.have.property('data');\r",
+							"    pm.expect(json.data.id).to.eql(Number(pm.collectionVariables.get('book_id')))\r",
+							"})"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{base_url}}/books/{{book_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"books",
+						"{{book_id}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('status 200', () => pm.expect(pm.response.code).to.eql(200));\r",
+							"pm.test('autor actualizado', () => {\r",
+							"    const json = pm.reponse.json();\r",
+							"    pm.expect(json.data.author).to.eql('Richard');\r",
+							"})"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"author\": \"Richard\",\r\n  \"description\": \"Actualizado por {{richard_email}}\"\r\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/books/{{book_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"books",
+						"{{book_id}}"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					"// Genera un request id y timestamp\r",
+					"const now = new Date();\r",
+					"pm.collectionVariables.set('request_id', String (now.getTime()));\r",
+					"pm.collectionVariables.set('year_now', now.getFullYear());\r",
+					"\r",
+					"// Genera un ISBN dinámico de 13 digitos\r",
+					"const ts = String(now.getTime());\r",
+					"const isbn13 = (ts.padStart(13, '0')).slice(0, 13);\r",
+					"pm.collectionVariables.set('isbn_dynamic', isbn13);"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "sofia_name",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "sofia_email",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "richard_email",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "book_id",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "year_now",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "request_id",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "isbn_dynamic",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "isbn_last",
+			"value": "",
+			"description": {
+				"content": "",
+				"type": "text/plain"
+			}
+		}
+	]
+}
