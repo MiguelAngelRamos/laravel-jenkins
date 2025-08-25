@@ -141,8 +141,6 @@ stage('Postman (Newman en contenedor)') {
       rm -rf newman && mkdir -p newman
 
       UID_GID="$(id -u):$(id -g)"
-
-      # Prefijo npm escribible por el usuario no-root dentro del contenedor
       NPM_PREFIX=/tmp/npm
 
       docker run --rm --network ${DOCKER_NET} \
@@ -166,6 +164,7 @@ stage('Postman (Newman en contenedor)') {
     '''
   }
 }
+
 
 
   }
